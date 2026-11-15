@@ -10,9 +10,18 @@ import logging
 import os
 import warnings
 
-import earthaccess
 import numpy as np
-import xarray as xr
+
+try:
+    import earthaccess
+except ModuleNotFoundError:  # allow import for testing/simulation without NASA deps
+    earthaccess = None  # type: ignore[assignment]
+
+try:
+    import xarray as xr
+except ModuleNotFoundError:
+    xr = None  # type: ignore[assignment]
+
 from pyproj import Geod
 
 from app.core.config import get_settings
@@ -32,6 +41,11 @@ _MIN_VALID_PIXELS = 15
 
 def _login_once() -> None:
     """Ensure earthaccess is authenticated without interactive blocking."""
+    if earthaccess is None:
+        raise AequiscanError(
+            "earthaccess is not installed. Install it with "
+            "'pip install earthaccess' or pass 'simulate': true for offline testing."
+        )
     if getattr(earthaccess.__auth__, "authenticated", False):
         return
 
@@ -44,10 +58,10 @@ def _login_once() -> None:
 
     try:
         earthaccess.login(strategy="environment")
-    except (earthaccess.exceptions.LoginStrategyUnavailable, earthaccess.exceptions.LoginAttemptFailure, OSError):
+    except Exception:
         try:
             earthaccess.login(strategy="netrc")
-        except (earthaccess.exceptions.LoginStrategyUnavailable, earthaccess.exceptions.LoginAttemptFailure, OSError) as exc:
+        except Exception as exc:
             raise AequiscanError(
                 "NASA Earthdata Login credentials not found. Please set EARTHDATA_TOKEN "
                 "(or EARTHDATA_USERNAME and EARTHDATA_PASSWORD) in .env or configure ~/.netrc, "
@@ -114,6 +128,12 @@ def extract_emit_mineralogy(
         raise LatitudeBoundsError(
             f"Latitude {lat} exceeds EMIT ISS orbital bounds (54 N to 54 S). "
             "Use pre-2008 ASTER SWIR (AST_07) or HLSL30 band ratios for polar targets."
+        )
+
+    if earthaccess is None or xr is None:
+        raise AequiscanError(
+            "earthaccess and xarray must be installed for live EMIT extraction. "
+            "Install them or pass 'simulate': true for offline testing."
         )
 
     _login_once()

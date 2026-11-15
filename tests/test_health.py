@@ -57,4 +57,4 @@ async def test_mars_targets(client):
     assert resp.status_code == 200
     data = resp.json()
     assert "gale_crater" in data
-    assert "jezero_mons" in data
+    assert "jezero_crater" in data

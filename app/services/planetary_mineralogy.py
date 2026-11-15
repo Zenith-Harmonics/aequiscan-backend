@@ -8,6 +8,7 @@ with live PDS product IDs from ODE.
 from __future__ import annotations
 
 import logging
+import urllib.parse
 from typing import Any
 
 import httpx
@@ -15,6 +16,31 @@ import httpx
 from app.core.config import get_settings
 
 logger = logging.getLogger(__name__)
+
+
+def _extract_pds_product_id(product: dict[str, Any], default: str) -> str:
+    """Extract a concise PDS product identifier from an ODE product record."""
+    # 1. Product_name if present (e.g. 'frt000058a3_07_if165j_mtr3.img')
+    product_name = product.get("Product_name")
+    if product_name:
+        return str(product_name).split(".")[0].upper()
+
+    # 2. Extract from ProductURL query parameter 'product_id='
+    product_url = product.get("ProductURL", "")
+    if "product_id=" in product_url:
+        parsed = urllib.parse.urlparse(product_url)
+        params = urllib.parse.parse_qs(parsed.query)
+        if "product_id" in params and params["product_id"]:
+            return params["product_id"][0]
+
+    # 3. Extract from LabelURL filename
+    label_url = product.get("LabelURL", "")
+    if label_url:
+        filename = label_url.split("/")[-1]
+        return filename.split(".")[0]
+
+    # 4. Fallback to pdsid if present or default
+    return str(product.get("pdsid") or default)
 
 
 async def query_pds_ode_products(
@@ -25,6 +51,7 @@ async def query_pds_ode_products(
     lon: float,
     radius_deg: float = 0.08,
     limit: int = 5,
+    ihid: str | None = None,
 ) -> list[dict[str, Any]]:
     """
     Query PDS ODE REST API for overlapping products.
@@ -33,21 +60,32 @@ async def query_pds_ode_products(
     ----------
     target : "mars" | "moon"
     instrument : e.g. "CRISM", "M3"
-    product_type : e.g. "MTRDR", "L2"
+    product_type : e.g. "MTRDR", "REFIMG"
     """
     settings = get_settings()
     lon_360 = lon % 360.0
+
+    if ihid is None:
+        if target == "mars":
+            ihid = "MRO"
+        elif target == "moon":
+            ihid = "CH1-ORB" if instrument.upper() == "M3" else "LRO"
+        else:
+            ihid = "MRO"
+
+    min_lat = max(-90.0, lat - radius_deg)
+    max_lat = min(90.0, lat + radius_deg)
 
     params = {
         "query": "product",
         "results": "m",
         "output": "JSON",
         "target": target,
-        "ihid": "MRO" if target == "mars" else "CH1",
+        "ihid": ihid,
         "iid": instrument,
         "pt": product_type,
-        "minlat": lat - radius_deg,
-        "maxlat": lat + radius_deg,
+        "minlat": min_lat,
+        "maxlat": max_lat,
         "westernlon": (lon_360 - radius_deg) % 360.0,
         "easternlon": (lon_360 + radius_deg) % 360.0,
         "limit": limit,
@@ -88,7 +126,7 @@ async def get_mars_mineral_profile(
     return {
         "source": f"MRO CRISM MTRDR (~18 m; {len(products)} PDS granules matched)",
         "pds_sample_id": (
-            products[0].get("pdsid", "FRT0000B6F1") if products else "FRT0000B6F1"
+            _extract_pds_product_id(products[0], "FRT0000B6F1") if products else "FRT0000B6F1"
         ),
         "mean_band_depth": 0.048,
         "harmonized_profile": {
@@ -109,16 +147,17 @@ async def get_moon_mineral_profile(
     products = await query_pds_ode_products(
         target="moon",
         instrument="M3",
-        product_type="L2",
+        product_type="REFIMG",
         lat=lat,
         lon=lon,
+        radius_deg=0.5,
     )
-    logger.info("PDS ODE: %d M3 L2 granules for Moon (%.2f, %.2f)", len(products), lat, lon)
+    logger.info("PDS ODE: %d M3 REFIMG granules for Moon (%.2f, %.2f)", len(products), lat, lon)
 
     return {
-        "source": f"Chandrayaan-1 M3 L2 + LRO Diviner CF ({len(products)} PDS granules matched)",
+        "source": f"Chandrayaan-1 M3 Level-2 Reflectance ({len(products)} PDS granules matched)",
         "pds_sample_id": (
-            products[0].get("pdsid", "M3G20090208T051432")
+            _extract_pds_product_id(products[0], "M3G20090208T051432")
             if products
             else "M3G20090208T051432"
         ),
