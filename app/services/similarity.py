@@ -1,11 +1,13 @@
 """
 Analog Similarity Index (ASI) computation.
 
-Implements the weighted normalised Euclidean distance formula:
+Implements the weighted Bray-Curtis similarity formula for compositional
+mineralogical profiles:
 
-    ASI(E, P) = 1 - sqrt(sum_i w_i (x_E,i - x_P,i)^2) / sqrt(sum_i w_i)
+    ASI(E, P) = 1 - sum_i(w_i * |x_E,i - x_P,i|) / sum_i(w_i * (x_E,i + x_P,i))
 
 All inputs are expected to be [0, 1]-normalised fractional profiles.
+Returns 0.0 for completely disjoint assemblages and 1.0 for identical profiles.
 """
 from __future__ import annotations
 
@@ -23,25 +25,38 @@ def compute_mineral_asi(
     """
     Compute mineralogy-only ASI between an Earth tile and a planetary target.
 
+    Parameters
+    ----------
+    earth_profile : dict[str, float]
+        Fractional mineral abundances [0, 1] for the Earth analog site.
+    planetary_profile : dict[str, float]
+        Fractional mineral abundances [0, 1] for the planetary target.
+    weights : dict[str, float] | None, optional
+        Per-mineral-class weights (defaults to 1.0 for all classes).
+
     Returns
     -------
-    asi_score : float in [0, 1]
-    axis_details : per-class breakdown
+    asi_score : float
+        Similarity score in [0, 1].
+    axis_details : list[ASIAxisDetail]
+        Per-class breakdown for UI reporting.
     """
     if weights is None:
         weights = {k: 1.0 for k in MINERAL_CLASSES}
 
     details: list[ASIAxisDetail] = []
-    weighted_sq_diff = 0.0
-    weight_sum = 0.0
+    weighted_abs_diff = 0.0
+    weighted_sum = 0.0
 
     for cls in MINERAL_CLASSES:
-        e_val = earth_profile.get(cls, 0.0)
-        p_val = planetary_profile.get(cls, 0.0)
-        w = weights.get(cls, 1.0)
+        e_val = float(earth_profile.get(cls, 0.0))
+        p_val = float(planetary_profile.get(cls, 0.0))
+        w = max(0.0, float(weights.get(cls, 1.0)))
+
         diff = abs(e_val - p_val)
-        weighted_sq_diff += w * (diff ** 2)
-        weight_sum += w
+        weighted_abs_diff += w * diff
+        weighted_sum += w * (e_val + p_val)
+
         details.append(
             ASIAxisDetail(
                 mineral_class=cls,
@@ -52,5 +67,9 @@ def compute_mineral_asi(
             )
         )
 
-    asi = 1.0 - (np.sqrt(weighted_sq_diff) / np.sqrt(weight_sum))
+    if weighted_sum <= 0.0:
+        asi = 0.0
+    else:
+        asi = 1.0 - (weighted_abs_diff / weighted_sum)
+
     return float(np.clip(asi, 0.0, 1.0)), details

@@ -1,13 +1,10 @@
 """
 Mars & Moon mineralogy via PDS Orbital Data Explorer (ODE) REST API.
-
-Until full spectral processing of CRISM / M3 cubes is implemented,
-this module returns literature-anchored reference profiles enriched
-with live PDS product IDs from ODE.
 """
 from __future__ import annotations
 
 import logging
+import math
 from typing import Any
 
 import httpx
@@ -15,6 +12,36 @@ import httpx
 from app.core.config import get_settings
 
 logger = logging.getLogger(__name__)
+
+INSTRUMENT_HOSTS: dict[str, str] = {
+    "CRISM": "MRO",
+    "M3": "CH1",
+    "DIVINER": "LRO",
+}
+
+DEFAULT_MARS_SAMPLE_ID = "FRT0000B6F1"
+DEFAULT_MOON_SAMPLE_ID = "M3G20090208T051432"
+
+
+def _angular_distance_sq(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    dlat = lat1 - lat2
+    dlon = ((lon1 - lon2 + 180.0) % 360.0) - 180.0
+    cos_lat = math.cos(math.radians((lat1 + lat2) * 0.5))
+    return dlat * dlat + (dlon * cos_lat) ** 2
+
+
+def _sort_products_by_proximity(
+    products: list[dict[str, Any]], lat: float, lon_360: float
+) -> list[dict[str, Any]]:
+    def _dist_key(product: dict[str, Any]) -> float:
+        try:
+            clat = float(product["Center_latitude"])
+            clon = float(product["Center_longitude"]) % 360.0
+            return _angular_distance_sq(lat, lon_360, clat, clon)
+        except (KeyError, TypeError, ValueError):
+            return float("inf")
+
+    return sorted(products, key=_dist_key)
 
 
 async def query_pds_ode_products(
@@ -25,71 +52,88 @@ async def query_pds_ode_products(
     lon: float,
     radius_deg: float = 0.08,
     limit: int = 5,
+    client: httpx.AsyncClient | None = None,
 ) -> list[dict[str, Any]]:
-    """
-    Query PDS ODE REST API for overlapping products.
+    if not -90.0 <= lat <= 90.0:
+        raise ValueError(f"Latitude {lat} out of valid range [-90.0, 90.0]")
 
-    Parameters
-    ----------
-    target : "mars" | "moon"
-    instrument : e.g. "CRISM", "M3"
-    product_type : e.g. "MTRDR", "L2"
-    """
+    inst_upper = instrument.upper()
+    ihid = INSTRUMENT_HOSTS.get(inst_upper)
+    if not ihid:
+        raise ValueError(f"Unsupported PDS instrument: {instrument}")
+
     settings = get_settings()
     lon_360 = lon % 360.0
 
-    params = {
+    params: dict[str, Any] = {
         "query": "product",
         "results": "m",
         "output": "JSON",
-        "target": target,
-        "ihid": "MRO" if target == "mars" else "CH1",
-        "iid": instrument,
+        "target": target.lower(),
+        "ihid": ihid,
+        "iid": inst_upper,
         "pt": product_type,
-        "minlat": lat - radius_deg,
-        "maxlat": lat + radius_deg,
-        "westernlon": (lon_360 - radius_deg) % 360.0,
-        "easternlon": (lon_360 + radius_deg) % 360.0,
+        "minlat": max(-90.0, lat - radius_deg),
+        "maxlat": min(90.0, lat + radius_deg),
+        "westernlon": max(0.0, lon_360 - radius_deg),
+        "easternlon": min(360.0, lon_360 + radius_deg),
         "limit": limit,
     }
 
-    try:
-        async with httpx.AsyncClient(timeout=15.0) as client:
-            resp = await client.get(settings.pds_ode_base_url, params=params)
-            resp.raise_for_status()
+    async def _fetch(http_client: httpx.AsyncClient) -> list[dict[str, Any]]:
+        resp = await http_client.get(settings.pds_ode_base_url, params=params)
+        resp.raise_for_status()
         data = resp.json()
-        ode_results = data.get("ODEResults", {}) if isinstance(data, dict) else {}
-        products_container = ode_results.get("Products") if isinstance(ode_results, dict) else None
 
-        if isinstance(products_container, dict):
-            products = products_container.get("Product", [])
-            if isinstance(products, dict):
-                products = [products]
-            return products
-        return []
+        ode_results = data.get("ODEResults") if isinstance(data, dict) else None
+        products_container = (
+            ode_results.get("Products") if isinstance(ode_results, dict) else None
+        )
+
+        if not isinstance(products_container, dict):
+            return []
+
+        raw_products = products_container.get("Product", [])
+        if isinstance(raw_products, dict):
+            products = [raw_products]
+        elif isinstance(raw_products, list):
+            products = [p for p in raw_products if isinstance(p, dict)]
+        else:
+            return []
+
+        return _sort_products_by_proximity(products, lat, lon_360)
+
+    try:
+        if client is not None:
+            return await _fetch(client)
+        async with httpx.AsyncClient(timeout=15.0) as temp_client:
+            return await _fetch(temp_client)
     except (httpx.HTTPError, KeyError, ValueError) as exc:
-        logger.warning("PDS ODE unreachable for %s/%s: %s", target, instrument, exc)
+        logger.warning("PDS ODE unreachable for %s/%s: %s", target, inst_upper, exc)
         return []
 
 
 async def get_mars_mineral_profile(
-    lat: float, lon: float
+    lat: float,
+    lon: float,
+    client: httpx.AsyncClient | None = None,
 ) -> dict[str, Any]:
-    """Return a Mars CRISM-anchored mineral profile for the given coordinate."""
     products = await query_pds_ode_products(
         target="mars",
         instrument="CRISM",
         product_type="MTRDR",
         lat=lat,
         lon=lon,
+        client=client,
     )
-    logger.info("PDS ODE: %d CRISM MTRDR granules for Mars (%.2f, %.2f)", len(products), lat, lon)
+    matched_count = len(products)
+    live_id = products[0].get("pdsid") if products else None
 
     return {
-        "source": f"MRO CRISM MTRDR (~18 m; {len(products)} PDS granules matched)",
-        "pds_sample_id": (
-            products[0].get("pdsid", "FRT0000B6F1") if products else "FRT0000B6F1"
-        ),
+        "source": f"MRO CRISM MTRDR (~18 m; {matched_count} PDS granules matched)",
+        "pds_sample_id": live_id or DEFAULT_MARS_SAMPLE_ID,
+        "is_fallback": not bool(live_id),
+        "matched_granule_count": matched_count,
         "mean_band_depth": 0.048,
         "harmonized_profile": {
             "mafic_olivine_pyroxene": 0.22,
@@ -103,25 +147,27 @@ async def get_mars_mineral_profile(
 
 
 async def get_moon_mineral_profile(
-    lat: float, lon: float
+    lat: float,
+    lon: float,
+    client: httpx.AsyncClient | None = None,
 ) -> dict[str, Any]:
-    """Return a Moon M3/Diviner-anchored mineral profile for the given coordinate."""
+    # FIXED: PDS ODE indexes Chandrayaan-1 M3 reflectance products under "RFL" instead of "L2"
     products = await query_pds_ode_products(
         target="moon",
         instrument="M3",
-        product_type="L2",
+        product_type="RFL",
         lat=lat,
         lon=lon,
+        client=client,
     )
-    logger.info("PDS ODE: %d M3 L2 granules for Moon (%.2f, %.2f)", len(products), lat, lon)
+    matched_count = len(products)
+    live_id = products[0].get("pdsid") if products else None
 
     return {
-        "source": f"Chandrayaan-1 M3 L2 + LRO Diviner CF ({len(products)} PDS granules matched)",
-        "pds_sample_id": (
-            products[0].get("pdsid", "M3G20090208T051432")
-            if products
-            else "M3G20090208T051432"
-        ),
+        "source": f"Chandrayaan-1 M3 RFL + LRO Diviner CF ({matched_count} PDS granules matched)",
+        "pds_sample_id": live_id or DEFAULT_MOON_SAMPLE_ID,
+        "is_fallback": not bool(live_id),
+        "matched_granule_count": matched_count,
         "mean_band_depth": 0.021,
         "harmonized_profile": {
             "mafic_olivine_pyroxene": 0.14,

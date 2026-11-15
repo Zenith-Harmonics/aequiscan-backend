@@ -38,8 +38,16 @@ def test_maximally_different_profiles():
 
 
 def test_custom_weights_affect_score():
-    earth = {"mafic_olivine_pyroxene": 1.0, **{c: 0.0 for c in MINERAL_CLASSES[1:]}}
-    planet = {"mafic_olivine_pyroxene": 0.0, **{c: 0.0 for c in MINERAL_CLASSES[1:]}}
+    earth = {
+        "mafic_olivine_pyroxene": 1.0,
+        "plagioclase_anorthosite": 0.5,
+        **{c: 0.0 for c in MINERAL_CLASSES[2:]},
+    }
+    planet = {
+        "mafic_olivine_pyroxene": 0.0,
+        "plagioclase_anorthosite": 0.5,
+        **{c: 0.0 for c in MINERAL_CLASSES[2:]},
+    }
 
     # Equal weights
     s1, _ = compute_mineral_asi(earth, planet, weights={c: 1.0 for c in MINERAL_CLASSES})
