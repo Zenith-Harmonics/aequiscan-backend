@@ -16,6 +16,15 @@ class MineralProfile(BaseModel):
     pds_sample_id: str | None = Field(
         None, description="PDS product ID (Mars / Moon only)"
     )
+    is_fallback: bool = Field(
+        default=False, 
+        description="True if live PDS ODE query failed/returned 0 results and a default sample ID was used"
+    )
+    matched_granule_count: int = Field(
+        default=0, 
+        ge=0, 
+        description="Number of matching PDS granules found via ODE search"
+    )
     n_pixels: int | None = Field(
         None, ge=0, description="Total footprint pixels examined"
     )
