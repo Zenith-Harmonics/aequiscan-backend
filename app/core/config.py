@@ -28,12 +28,24 @@ class Settings(BaseSettings):
     def cors_origin_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
 
-    # ── NASA Earthdata ───────────────────────────────────────────────
+    # ── NASA Earthdata Login (EMIT, MODIS, SMAP) ─────────────────────
     earthdata_username: str = ""
     earthdata_password: str = ""
     earthdata_token: str = ""
 
-    # ── Planetary data ───────────────────────────────────────────────
+    # ── OpenTopography API (SRTM, ALOS World 3D, COP30) ──────────────
+    opentopography_api_key: str = ""
+    opentopography_base_url: str = "https://portal.opentopography.org/API/globaldem"
+
+    # ── Microsoft Planetary Computer (Sentinel-2, Sentinel-1) ────────
+    planetary_computer_api_key: str = ""
+    planetary_computer_stac_url: str = "https://planetarycomputer.microsoft.com/api/stac/v1"
+
+    # ── NASA Public APIs (No Auth Required) ──────────────────────────
+    nasa_power_base_url: str = "https://power.larc.nasa.gov/api/temporal/daily/point"
+    asf_daac_base_url: str = "https://api.daac.asf.alaska.edu/services/search/param"
+
+    # ── Planetary Mission Data APIs (NASA / PDS ODE) ─────────────────
     pds_ode_base_url: str = "https://oderest.rsl.wustl.edu/live2/"
     nasa_trek_base_url: str = "https://trek.nasa.gov"
 

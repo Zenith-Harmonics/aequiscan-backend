@@ -143,3 +143,74 @@ async def test_missing_both_id_and_coords_fails_422(client):
     )
     assert resp.status_code == 422
     assert "planetary_target_id" in resp.text or "planetary_body" in resp.text
+
+
+@pytest.mark.asyncio
+async def test_compare_moon_target_with_simulate_flag(client):
+    """Test comparing against a Moon target (Mons Mouton Plateau) with simulated Earth data."""
+    resp = await client.post(
+        "/api/v1/mineralogy/compare",
+        json={
+            "earth_lat": 38.45,
+            "earth_lon": 91.42,
+            "earth_radius_m": 2000.0,
+            "planetary_target_id": "mons_mouton_plateau",
+            "simulate": True,
+        },
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["planetary_body"] == "moon"
+    assert "Mons Mouton Plateau" in data["planetary_site_name"]
+    assert 0.0 <= data["asi"]["asi_score"] <= 1.0
+    assert len(data["asi"]["axis_details"]) == 6
+    # Plagioclase / anorthosite is the dominant highland lunar mineral
+    assert data["asi"]["planetary_profile"]["harmonized_profile"]["plagioclase_anorthosite"] == 0.81
+
+
+def test_pds_ode_product_id_extraction():
+    """Verify robust extraction of product IDs from various PDS ODE record structures."""
+    from app.services.planetary_mineralogy import _extract_pds_product_id
+
+    # 1. Product_name provided (Mars CRISM)
+    mars_rec = {"Product_name": "frt000058a3_07_if165j_mtr3.img"}
+    assert _extract_pds_product_id(mars_rec, "DEFAULT") == "FRT000058A3_07_IF165J_MTR3"
+
+    # 2. ProductURL with query parameter (Moon M3)
+    moon_url_rec = {
+        "ProductURL": "http://ode.rsl.wustl.edu/moon/indexproductpage.aspx?product_id=M3G20090131T112714_V01_RFL&product_idGeo=13446943"
+    }
+    assert _extract_pds_product_id(moon_url_rec, "DEFAULT") == "M3G20090131T112714_V01_RFL"
+
+    # 3. LabelURL filename
+    lbl_rec = {
+        "LabelURL": "https://planetarydata.jpl.nasa.gov/img/data/m3/CH1M3_0004/DATA/20081118_20090214/200901/L2/M3G20090131T112714_V01_L2.LBL"
+    }
+    assert _extract_pds_product_id(lbl_rec, "DEFAULT") == "M3G20090131T112714_V01_L2"
+
+    # 4. Fallback to default
+    assert _extract_pds_product_id({}, "FALLBACK_ID") == "FALLBACK_ID"
+
+
+# ---------------------------------------------------------------------------
+# Integration tests (require NASA Earthdata credentials + network)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_compare_qaidam_vs_gale(client):
+    """Full Earth <-> Mars mineralogy comparison (needs EDL + network)."""
+    resp = await client.post(
+        "/api/v1/mineralogy/compare",
+        json={
+            "earth_lat": 38.45,
+            "earth_lon": 91.42,
+            "earth_radius_m": 2000.0,
+            "planetary_target_id": "gale_crater",
+        },
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert 0.0 <= data["asi"]["asi_score"] <= 1.0
+    assert data["planetary_body"] == "mars"

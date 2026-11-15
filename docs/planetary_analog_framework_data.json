@@ -1,0 +1,65 @@
+{
+  "framework": "Planetary Analog Comparative Framework",
+  "version": "2025.4.1",
+  "description": "Cross-referencing terrestrial extreme field environments against Lunar and Martian surface realities for mission architectures, instrumentation calibration, and traversability validation.",
+  "pillars": [
+    {
+      "sector": 1,
+      "name": "Geomorphology & Topography",
+      "scope": "Evaluates terrain shape, roughness, landing safety, and traversability.",
+      "metrics": ["Slope Angle", "Roughness", "Boulder Density", "Landforms"],
+      "earth_datasets": ["SRTM", "ASTER GDEM", "OpenTopography LiDAR"],
+      "moon_mars_datasets": ["MOLA", "LOLA", "HiRISE Imagery"]
+    },
+    {
+      "sector": 2,
+      "name": "Mineralogy & Geochemistry",
+      "scope": "Evaluates composition for drill tests, spectrometers, and ISRU potential.",
+      "metrics": ["Rock & Soil Types", "Evaporites", "Salts", "Albedo"],
+      "earth_datasets": ["Landsat 8/9", "Sentinel-2", "ASTER"],
+      "moon_mars_datasets": ["CRISM", "M3 Mapper"]
+    },
+    {
+      "sector": 3,
+      "name": "Subsurface & Geophysics",
+      "scope": "Evaluates underground structures for radiation shielding and habitats.",
+      "metrics": ["Lava Tubes", "Caves", "Subsurface Ice", "Stratigraphy"],
+      "earth_datasets": ["Sentinel-1 SAR", "ALOS PALSAR", "Field GPR"],
+      "moon_mars_datasets": ["SHARAD", "MARSIS", "Mini-RF"]
+    },
+    {
+      "sector": 4,
+      "name": "Thermal Environment",
+      "scope": "Evaluates thermal extremes for extravehicular suits, batteries, and habitats.",
+      "metrics": ["Diurnal Range", "Thermal Inertia", "Extreme Lows/Highs"],
+      "earth_datasets": ["MODIS Thermal", "Landsat TIRS"],
+      "moon_mars_datasets": ["THEMIS", "Diviner Radiometer"]
+    },
+    {
+      "sector": 5,
+      "name": "Atmospheric & Aeolian Processes",
+      "scope": "Evaluates wind shaping, dust transport, aridity, and radiation exposure.",
+      "metrics": [
+        "Dunes",
+        "Yardangs",
+        "Aridity Index",
+        "Pressure",
+        "UV Radiation"
+      ],
+      "earth_datasets": ["NASA MERRA-2", "Terra/Aqua Aerosol"],
+      "moon_mars_datasets": ["Mars Climate Sounder", "REMS"]
+    },
+    {
+      "sector": 6,
+      "name": "Astrobiology & Habitability",
+      "scope": "Evaluates extreme survival limits and biosignature preservation models.",
+      "metrics": [
+        "Extremophile Habitats",
+        "Biosignature Preservation",
+        "Moisture"
+      ],
+      "earth_datasets": ["SMAP Soil Moisture", "Extremophile DB"],
+      "moon_mars_datasets": ["Curiosity SAM", "Perseverance SHERLOC"]
+    }
+  ]
+}

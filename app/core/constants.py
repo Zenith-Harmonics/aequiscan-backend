@@ -81,10 +81,10 @@ PRELOADED_TARGETS: dict[str, dict] = {
             "radius_m": 2000.0,
             "body": "mars",
         },
-        "jezero_mons": {
-            "name": "Jezero Mons",
-            "lat": 16.5300,
-            "lon": 77.4100,
+        "jezero_crater": {
+            "name": "Jezero Crater (Perseverance Landing Site)",
+            "lat": 18.4447,
+            "lon": 77.4508,
             "radius_m": 2000.0,
             "body": "mars",
         },
