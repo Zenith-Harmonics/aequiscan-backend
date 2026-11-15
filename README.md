@@ -184,7 +184,7 @@ Sector scores are combined via mission-profile weights (`balanced`: `20%` Geomor
 
 ## 3. Summary of Discoveries: North America Frontier vs. Jezero Crater (Mars)
 
-In the completed North American sweep targeting **Jezero Crater (`18.45° N, 77.45° E`)** under the `balanced` mission profile ([`novel_north_america_frontier_jezero_crater_balanced_ranked.csv`](../findings/novel_north_america_frontier_jezero_crater_balanced_ranked.csv)), **229 candidate frontier tiles** were generated across five North American regions:
+In the completed North American sweep targeting **Jezero Crater (`18.45° N, 77.45° E`)** under the `balanced` mission profile ([`novel_north_america_frontier_jezero_crater_balanced_ranked.csv`](../discovery/novel_north_america_frontier_jezero_crater_balanced_ranked.csv)), **229 candidate frontier tiles** were generated across five North American regions:
 
 - **4 Corridors Filtered Out by Aridity (`P/PET > 0.25`):** `Owyhee_Alvord_Basin`, `Bolson_de_Mapimi_Mexico`, `Sevier_West_Desert_UT`, and `Mackenzie_Peel_Plateau` were automatically skipped at Tier-0 because their 2023–2024 precipitation-to-evapotranspiration ratios exceeded `0.25`.
 - **1 Corridor Validated (`Vizcaino_Baja_Mesas`, Baja California Sur, Mexico):** **76 tiles** (`14` Stage 1 coarse tiles + `62` Stage 2 fine zoom tiles) passed all aridity and confidence checks, located **312.9 km to 533.1 km** away from the nearest known NASA analog site (`Pinacate_Sonora_Mexico`).
