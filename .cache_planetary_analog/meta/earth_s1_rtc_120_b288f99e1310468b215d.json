@@ -1,9 +1,0 @@
-{
-  "source": "Planetary Computer Sentinel-1 RTC (Lee-filtered C-band)",
-  "stac_item_id": "S1A_IW_GRDH_1SDV_20240928T115229_20240928T115254_055865_06D3EF_rtc",
-  "datetime": "2024-09-28T11:52:41.684235+00:00",
-  "orbit_state": "ascending",
-  "sar_vv_db": -7.896,
-  "sar_vh_db": -16.71,
-  "cpr_linear": 0.1372
-}

@@ -17,15 +17,28 @@ from app.core.schemas import MetricComparison, SectorID, SectorResult, SiteDataB
 logger = logging.getLogger(__name__)
 
 
+def _classify_unesco_aridity(aridity_index: float) -> str:
+    """Return standard UNESCO aridity regime label for P/PET."""
+    if aridity_index <= 0.001:
+        return "Zero moisture"
+    if aridity_index < 0.05:
+        return "Hyper-arid"
+    if aridity_index < 0.20:
+        return "Arid"
+    if aridity_index < 0.50:
+        return "Semi-arid"
+    return "Sub-humid / Humid"
+
+
 class AtmosphericEvaluator(BaseSectorEvaluator):
     """
     Sector 5 Evaluator: Atmospheric & Aeolian Processes.
 
     Compares:
-      - Aridity & desiccation index (moisture deficit benchmark)
-      - Aeolian wind speed regime & friction dynamics
-      - Atmospheric surface pressure (logarithmic barometric scale)
-      - Surface ultraviolet (UV) radiation flux
+    - Aridity & desiccation index (moisture deficit benchmark)
+    - Aeolian wind speed regime & friction dynamics
+    - Atmospheric surface pressure (logarithmic barometric scale)
+    - Surface ultraviolet (UV) radiation flux
     """
 
     sector = SectorID.ATMOSPHERIC
@@ -33,7 +46,7 @@ class AtmosphericEvaluator(BaseSectorEvaluator):
     @staticmethod
     def _get_atmospheric_profile(bundle: SiteDataBundle) -> Dict[str, float]:
         """Extract atmospheric scalars with physics-anchored celestial body defaults."""
-        scalars = dict(bundle.atmospheric_scalars)
+        scalars = dict(bundle.atmospheric_scalars or {})
         body = bundle.site.body.value
 
         defaults = {
@@ -61,7 +74,8 @@ class AtmosphericEvaluator(BaseSectorEvaluator):
         }
 
         profile = defaults.get(body, defaults["earth"]).copy()
-        profile.update(scalars)
+        # Only override defaults with non-None values to avoid TypeError on float(None)
+        profile.update({k: float(v) for k, v in scalars.items() if v is not None})
         return profile
 
     def evaluate(
@@ -79,7 +93,6 @@ class AtmosphericEvaluator(BaseSectorEvaluator):
         # ------------------------------------------------------------------
         # 1. Aridity & Extreme Desiccation Match
         # ------------------------------------------------------------------
-        # In planetary science, hyper-arid analogs (P/PET < 0.05) best match Mars/Moon desiccation
         e_arid = float(e_atm.get("aridity_index", 0.03))
         t_arid = float(t_atm.get("aridity_index", 0.0))
         aridity_sim = self.gaussian_scalar_similarity(e_arid, t_arid, tolerance=0.08)
@@ -88,8 +101,8 @@ class AtmosphericEvaluator(BaseSectorEvaluator):
             metrics.append(
                 MetricComparison(
                     name="Aridity & Desiccation Index",
-                    earth_value=f"{e_arid:.3f} (Hyper-arid)",
-                    target_value=f"{t_arid:.3f} (Zero moisture)",
+                    earth_value=f"{e_arid:.3f} ({_classify_unesco_aridity(e_arid)})",
+                    target_value=f"{t_arid:.3f} ({_classify_unesco_aridity(t_arid)})",
                     unit="P/PET",
                     similarity=round(float(aridity_sim), 4),
                 )
@@ -102,7 +115,6 @@ class AtmosphericEvaluator(BaseSectorEvaluator):
         # ------------------------------------------------------------------
         e_wind = float(e_atm.get("mean_wind_speed_ms", 6.0))
         t_wind = float(t_atm.get("mean_wind_speed_ms", 0.0))
-        # Gaussian tolerance for aeolian shaping: 4.0 m/s
         wind_sim = self.gaussian_scalar_similarity(e_wind, t_wind, tolerance=4.0)
 
         if wind_sim is not None:
@@ -124,11 +136,10 @@ class AtmosphericEvaluator(BaseSectorEvaluator):
         e_pres = max(1e-12, float(e_atm.get("surface_pressure_pa", 101325.0)))
         t_pres = max(1e-12, float(t_atm.get("surface_pressure_pa", 610.0)))
 
-        # Compare orders of magnitude difference in barometric pressure
         log_e = float(np.log10(e_pres))
         log_t = float(np.log10(t_pres))
-        # Tolerance: 2.5 orders of magnitude
-        pres_sim = self.gaussian_scalar_similarity(log_e, log_t, tolerance=2.5)
+        # Tolerance: 1.0 order of magnitude (10x pressure difference)
+        pres_sim = self.gaussian_scalar_similarity(log_e, log_t, tolerance=1.0)
 
         if pres_sim is not None:
             e_str = f"{e_pres:.0f} Pa" if e_pres > 10 else f"{e_pres:.1e} Pa"
@@ -169,7 +180,7 @@ class AtmosphericEvaluator(BaseSectorEvaluator):
         # Aggregation & Explanations
         # ------------------------------------------------------------------
         total_weight = sum(weights)
-        final_score = float(sum(s * w for s, w in zip(scores, weights)) / total_weight)
+        final_score = float(sum(s * w for s, w in zip(scores, weights)) / total_weight) if total_weight > 0 else 0.0
         confidence = float(min(1.0, len(scores) / 4.0))
 
         explanation = (

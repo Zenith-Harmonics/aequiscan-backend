@@ -7,11 +7,13 @@ import logging
 import math
 from typing import Any
 
+import httpx
+
+from app.core.config import get_settings
 from app.services.pds_planetary import (
     _extract_pds_product_id,
     fetch_mars_orbital_telemetry,
     fetch_moon_orbital_telemetry,
-    query_pds_ode_products,
 )
 
 logger = logging.getLogger(__name__)
