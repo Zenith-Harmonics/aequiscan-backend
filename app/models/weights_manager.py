@@ -1,26 +1,22 @@
 from pathlib import Path
 from typing import Dict
-
 from huggingface_hub import hf_hub_download, snapshot_download
 
-
-# Resolve the directory containing this script.
-# All model weights will be stored relative to this location,
-# regardless of the current working directory.
-SCRIPT_DIR = Path(__file__).resolve().parent
-WEIGHTS_DIR = SCRIPT_DIR / "weights"
+DEFAULT_WEIGHTS_DIR = Path(__file__).resolve().parent / "weights"
 
 
 class ModelWeightsManager:
-    """Manages downloading, storing, and checking model weights."""
+    """
+    Manages local verification and Hugging Face Hub downloading for:
+      - BIFOLD BigEarthNet v2.0 ConvNeXtV2-Base (Sentinel-1 SAR & Sentinel-2 Multispectral)
+      - RemoteCLIP ViT-L-14 (High-resolution optical imagery for Mars/Moon & Earth RGB)
+    """
 
-    def __init__(self, base_dir: str | Path = WEIGHTS_DIR):
-        # Initialize the base directory for all model weights.
+    def __init__(self, base_dir: str | Path = DEFAULT_WEIGHTS_DIR) -> None:
         self.base_dir = Path(base_dir).resolve()
         self.base_dir.mkdir(parents=True, exist_ok=True)
 
-        # Registry containing the configuration of all supported models.
-        self.registry = {
+        self.registry: Dict[str, dict] = {
             "sentinel_1": {
                 "repo_id": "BIFOLD-BigEarthNetv2-0/convnextv2_base-s1-v0.2.0",
                 "type": "snapshot",
@@ -42,145 +38,88 @@ class ModelWeightsManager:
         }
 
     def is_downloaded(self, model_key: str) -> bool:
-        """Check whether a model has already been downloaded locally."""
-
+        """Check whether the requested model artifacts exist and are non-empty on disk."""
         if model_key not in self.registry:
-            raise ValueError(
-                f"Unknown model: '{model_key}'. "
-                f"Available models: {list(self.registry.keys())}"
-            )
+            raise ValueError(f"Unknown model key '{model_key}'. Valid keys: {list(self.registry.keys())}")
 
         spec = self.registry[model_key]
         target_dir: Path = spec["target_dir"]
 
-        # The target directory must exist.
         if not target_dir.exists():
             return False
 
-        # For single-file models, check whether the file exists and is not empty.
         if spec["type"] == "file":
             file_path = target_dir / spec["filename"]
             return file_path.is_file() and file_path.stat().st_size > 0
 
-        # For snapshot models, check for the configuration file
-        # and at least one model weights file.
         if spec["type"] == "snapshot":
             marker_path = target_dir / spec["marker_file"]
-
-            has_weights = (
-                any(target_dir.glob("*.safetensors"))
-                or any(target_dir.glob("*.bin"))
-            )
-
+            has_weights = any(target_dir.glob("*.safetensors")) or any(target_dir.glob("*.bin"))
             return marker_path.is_file() and has_weights
 
         return False
+
+    def get_model_path(self, model_key: str) -> Path:
+        """Return the expected local path for a model without triggering a download."""
+        if model_key not in self.registry:
+            raise ValueError(f"Unknown model key '{model_key}'.")
+        spec = self.registry[model_key]
+        target_dir: Path = spec["target_dir"]
+        return (target_dir / spec["filename"]) if spec["type"] == "file" else target_dir
 
     def fetch_model(
         self,
         model_key: str,
         force_download: bool = False,
+        local_files_only: bool = False,
     ) -> Path:
-        """
-        Download a model if it is not already available locally.
-
-        Args:
-            model_key: Identifier of the model to download.
-            force_download: Whether to force a new download.
-
-        Returns:
-            Path to the downloaded model or model directory.
-        """
-
+        """Download model weights if missing locally and return the resolved local path."""
         if model_key not in self.registry:
-            raise ValueError(f"Unknown model: '{model_key}'.")
+            raise ValueError(f"Unknown model key '{model_key}'.")
 
         spec = self.registry[model_key]
         target_dir: Path = spec["target_dir"]
 
-        # Skip downloading if the model is already available locally.
         if not force_download and self.is_downloaded(model_key):
-            print(f"[CACHE HIT] '{model_key}' is already available at: {target_dir}")
+            return self.get_model_path(model_key)
 
-            if spec["type"] == "file":
-                return target_dir / spec["filename"]
+        if local_files_only:
+            raise FileNotFoundError(
+                f"Model '{model_key}' not found in '{target_dir}' and local_files_only=True."
+            )
 
-            return target_dir
-
-        print(
-            f"[DOWNLOADING] Downloading '{model_key}' "
-            f"from {spec['repo_id']}..."
-        )
-
-        # Ensure the target directory exists before downloading.
         target_dir.mkdir(parents=True, exist_ok=True)
 
-        # Download a single model file.
         if spec["type"] == "file":
-            downloaded_path = hf_hub_download(
+            downloaded = hf_hub_download(
                 repo_id=spec["repo_id"],
                 filename=spec["filename"],
                 local_dir=target_dir,
                 force_download=force_download,
             )
+            return Path(downloaded)
 
-            return Path(downloaded_path)
-
-        # Download the entire model repository snapshot.
         if spec["type"] == "snapshot":
-            snapshot_path = snapshot_download(
+            snapshot = snapshot_download(
                 repo_id=spec["repo_id"],
                 local_dir=target_dir,
                 force_download=force_download,
             )
+            return Path(snapshot)
 
-            return Path(snapshot_path)
+        raise RuntimeError(f"Unsupported download type for '{model_key}'.")
 
-        raise RuntimeError(
-            f"Unsupported download type for model: {model_key}"
-        )
-
-    def fetch_all(self, force_download: bool = False) -> Dict[str, Path]:
-        """
-        Download all registered models.
-
-        Existing models are skipped unless force_download is enabled.
-
-        Returns:
-            Dictionary mapping model identifiers to their local paths.
-        """
-
-        model_paths = {}
-
-        for model_key in self.registry:
-            model_paths[model_key] = self.fetch_model(
-                model_key,
+    def fetch_all(
+        self,
+        force_download: bool = False,
+        local_files_only: bool = False,
+    ) -> Dict[str, Path]:
+        """Verify and fetch all configured models, returning a mapping of keys to local paths."""
+        return {
+            key: self.fetch_model(
+                key,
                 force_download=force_download,
+                local_files_only=local_files_only,
             )
-
-        return model_paths
-
-
-if __name__ == "__main__":
-
-    # Initialize the manager using the default weights directory.
-    # The directory is relative to this script, not the current working directory.
-    manager = ModelWeightsManager()
-
-    print(f"Weights directory: {manager.base_dir}")
-
-    # Check whether Sentinel-1 weights are already available.
-    print(
-        "Initial Sentinel-1 status:",
-        manager.is_downloaded("sentinel_1"),
-    )
-
-    # Download all registered models.
-    # Models that are already available locally will be skipped.
-    model_paths = manager.fetch_all()
-
-    # Display the final paths to all downloaded models.
-    print("\nFinal model paths:")
-
-    for model_name, model_path in model_paths.items():
-        print(f" - {model_name}: {model_path}")
+            for key in self.registry
+        }
