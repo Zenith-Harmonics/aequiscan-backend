@@ -1,8 +1,4 @@
-# AequiScan Backend
 
-[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
-[![FastAPI](https://img.shields.io/badge/FastAPI-0.110+-009688.svg)](https://fastapi.tiangolo.com/)
-[![Docker](https://img.shields.io/badge/docker-ready-2496ED.svg)](Dockerfile)
 
 Cross-planetary analog comparison dashboard API and autonomous frontier discovery engine — comparing **Earth**, **Moon**, and **Mars** surface properties for mission planning and planetary science discovery.
 
