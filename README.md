@@ -167,7 +167,7 @@ In a **229-tile continental sweep** targeting **Jezero Crater (`18.45° N, 77.45
 | **#5** | `0.10°` Fine | `27.750° N, -113.950° W` | **29.35%** | **58.70%** | `58.51%` | `85.68%` | `31.95%` | `449.1 km` |
 
 #### Discovery Documentation & Ranked Datasets
-- **Full Technical & Scientific Report:** [`discovery/docs/novel_analog_discovery.md`](discovery/discovery/novel_north_america_frontier_jezero_crater_balanced_ranked.csv)
+- **Full Technical & Scientific Report:** [`discovery/docs/novel_analog_discovery.md`](discovery/novel_north_america_frontier_jezero_crater_balanced_ranked.csv)
 - **Standalone Discovery Script:** [`discovery/discover_novel_americas_analogs.py`](discovery/discover_novel_americas_analogs.py)
 - **Ranked Results Dataset:** [`CSV`](discovery/novel_north_america_frontier_jezero_crater_balanced_ranked.csv) | [`JSON`](discovery/novel_north_america_frontier_jezero_crater_balanced_ranked.json)
 
