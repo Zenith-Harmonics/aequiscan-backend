@@ -1,6 +1,13 @@
+# AequiScan Backend
 
+[![Live Dashboard](https://img.shields.io/badge/Live_Dashboard-Zenith--Harmonics-FF6F00?style=for-the-badge&logo=githubpages&logoColor=white)](https://zenith-harmonics.github.io/aequiscan-frontend)
+[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg?style=for-the-badge)](https://www.python.org/downloads/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.110+-009688.svg?style=for-the-badge)](https://fastapi.tiangolo.com/)
+[![Docker](https://img.shields.io/badge/docker-ready-2496ED.svg?style=for-the-badge)](Dockerfile)
 
 Cross-planetary analog comparison dashboard API and autonomous frontier discovery engine — comparing **Earth**, **Moon**, and **Mars** surface properties for mission planning and planetary science discovery.
+
+> **Live Interactive Dashboard:** **[https://zenith-harmonics.github.io/aequiscan-frontend](https://zenith-harmonics.github.io/aequiscan-frontend)** (Frontend repository: [`Zenith-Harmonics/aequiscan-frontend`](https://github.com/Zenith-Harmonics/aequiscan-frontend))
 
 ---
 
@@ -167,7 +174,7 @@ In a **229-tile continental sweep** targeting **Jezero Crater (`18.45° N, 77.45
 | **#5** | `0.10°` Fine | `27.750° N, -113.950° W` | **29.35%** | **58.70%** | `58.51%` | `85.68%` | `31.95%` | `449.1 km` |
 
 #### Discovery Documentation & Ranked Datasets
-- **Full Technical & Scientific Report:** [`discovery/docs/novel_analog_discovery.md`](discovery/novel_north_america_frontier_jezero_crater_balanced_ranked.csv)
+- **Full Technical & Scientific Report:** [`discovery/docs/novel_analog_discovery.md`](discovery/docs/novel_analog_discovery.md)
 - **Standalone Discovery Script:** [`discovery/discover_novel_americas_analogs.py`](discovery/discover_novel_americas_analogs.py)
 - **Ranked Results Dataset:** [`CSV`](discovery/novel_north_america_frontier_jezero_crater_balanced_ranked.csv) | [`JSON`](discovery/novel_north_america_frontier_jezero_crater_balanced_ranked.json)
 
@@ -197,7 +204,7 @@ Each analytical dimension follows the same modular pattern:
 
 ### Core Design Principles
 
-- **API-First & Decoupled**: The FastAPI backend (`app/`) is completely independent from both frontends and the offline batch discovery engine (`discovery/`).
+- **API-First & Decoupled**: The FastAPI backend (`app/`) is completely independent from both the frontend ([`aequiscan-frontend`](https://zenith-harmonics.github.io/aequiscan-frontend)) and the offline batch discovery engine (`discovery/`).
 - **Versioned**: All REST routes live under `/api/v1/` for backwards compatibility.
 - **Async I/O**: NASA PDS ODE queries use `httpx` async; synchronous `earthaccess` granule streaming runs in a threadpool.
 - **Testable**: Pure-logic similarity and ASI engines have zero network/IO dependencies.
