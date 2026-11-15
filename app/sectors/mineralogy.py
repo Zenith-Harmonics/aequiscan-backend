@@ -46,9 +46,13 @@ class MineralogyEvaluator(BaseSectorEvaluator):
         matched_classes = {
             cls: float(np.nanmean(bundle.mineral_indices[cls]))
             for cls in MINERAL_CLASSES
-            if cls in bundle.mineral_indices and np.isscalar(bundle.mineral_indices[cls]) or (
-                isinstance(bundle.mineral_indices.get(cls), np.ndarray)
-                and bundle.mineral_indices[cls].size > 0
+            if (cls in bundle.mineral_indices)
+            and (
+                np.isscalar(bundle.mineral_indices[cls])
+                or (
+                    isinstance(bundle.mineral_indices[cls], np.ndarray)
+                    and bundle.mineral_indices[cls].size > 0
+                )
             )
         }
         if len(matched_classes) >= 3:

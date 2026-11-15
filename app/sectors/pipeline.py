@@ -18,6 +18,7 @@ from app.core.schemas import (
     SectorResult,
     SiteDataBundle,
 )
+from app.core.base_sector import BaseSectorEvaluator
 from app.sectors.astrobiology import AstrobiologyEvaluator
 from app.sectors.atmospheric import AtmosphericEvaluator
 from app.sectors.geomorphology import GeomorphologyEvaluator
@@ -40,7 +41,7 @@ class PlanetaryAnalogPipeline:
     """
 
     def __init__(self) -> None:
-        self.evaluators: Dict[SectorID, Any] = {
+        self.evaluators: Dict[SectorID, BaseSectorEvaluator] = {
             SectorID.GEOMORPHOLOGY: GeomorphologyEvaluator(),
             SectorID.MINERALOGY: MineralogyEvaluator(),
             SectorID.SUBSURFACE: SubsurfaceEvaluator(),

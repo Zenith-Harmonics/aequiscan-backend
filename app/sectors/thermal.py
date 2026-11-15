@@ -35,38 +35,8 @@ class ThermalEvaluator(BaseSectorEvaluator):
     def _extract_temperatures(
         bundle: SiteDataBundle,
     ) -> Tuple[Optional[np.ndarray], Optional[np.ndarray]]:
-        """Return (thermal_day_k, thermal_night_k) arrays with fallback estimates."""
-        t_day = bundle.thermal_day_k
-        t_night = bundle.thermal_night_k
-
-        if t_day is not None and t_night is not None:
-            return t_day, t_night
-
-        # Celestial body default approximations if thermal rasters are absent
-        body = bundle.site.body.value
-        rng = np.random.default_rng(seed=42)
-        grid_shape = (64, 64)
-
-        if body == "moon":
-            # Polar Artemis candidate default: cold environment (e.g. Mons Mouton / Haworth)
-            if t_day is None:
-                t_day = rng.normal(loc=130.0, scale=8.0, size=grid_shape).astype(np.float32)
-            if t_night is None:
-                t_night = rng.normal(loc=80.0, scale=6.0, size=grid_shape).astype(np.float32)
-        elif body == "mars":
-            # Gale / Jezero crater typical mid-latitude diurnal swing
-            if t_day is None:
-                t_day = rng.normal(loc=272.0, scale=6.0, size=grid_shape).astype(np.float32)
-            if t_night is None:
-                t_night = rng.normal(loc=196.0, scale=5.0, size=grid_shape).astype(np.float32)
-        elif body == "earth":
-            # Arid desert analog typical summer diurnal swing
-            if t_day is None:
-                t_day = rng.normal(loc=312.0, scale=4.0, size=grid_shape).astype(np.float32)
-            if t_night is None:
-                t_night = rng.normal(loc=271.0, scale=3.0, size=grid_shape).astype(np.float32)
-
-        return t_day, t_night
+        """Return (thermal_day_k, thermal_night_k) rasters when available."""
+        return bundle.thermal_day_k, bundle.thermal_night_k
 
     def evaluate(
         self,

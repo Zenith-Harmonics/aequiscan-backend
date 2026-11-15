@@ -108,7 +108,6 @@ def get_simulated_earth_profile(
         },
     }
 
-
 def extract_emit_mineralogy(
     lat: float,
     lon: float,
@@ -156,88 +155,97 @@ def extract_emit_mineralogy(
     for idx, granule in enumerate(results):
         logger.debug("Checking granule %d...", idx)
         opened_files = earthaccess.open([granule])
-        ds_root = xr.open_dataset(opened_files[0], engine="h5netcdf")
-        ds_meta = xr.open_dataset(opened_files[0], group="mineral_metadata", engine="h5netcdf")
-        ds_loc = xr.open_dataset(opened_files[0], group="location", engine="h5netcdf")
-
-        lat_grid = ds_loc["lat"].values
-        lon_grid = ds_loc["lon"].values
-
-        valid_coords = np.isfinite(lat_grid) & np.isfinite(lon_grid)
-        dist_m = np.full(lat_grid.shape, np.inf, dtype=np.float64)
-
-        _, _, dist_m[valid_coords] = geod.inv(
-            np.full(int(np.sum(valid_coords)), lon, dtype=np.float64),
-            np.full(int(np.sum(valid_coords)), lat, dtype=np.float64),
-            lon_grid[valid_coords].astype(np.float64),
-            lat_grid[valid_coords].astype(np.float64),
-        )
-
-        footprint_mask = dist_m <= radius_m
-        n_footprint_px = int(np.sum(footprint_mask))
-        if n_footprint_px == 0:
+        if not opened_files:
             continue
 
-        group1_id = ds_root["group_1_mineral_id"].values[footprint_mask]
-        band_depth = ds_root["group_1_band_depth"].values[footprint_mask]
+        fobj = opened_files[0]
+        try:
+            with (
+                xr.open_dataset(fobj, engine="h5netcdf") as ds_root,
+                xr.open_dataset(fobj, group="mineral_metadata", engine="h5netcdf") as ds_meta,
+                xr.open_dataset(fobj, group="location", engine="h5netcdf") as ds_loc,
+            ):
+                lat_grid = ds_loc["lat"].values
+                lon_grid = ds_loc["lon"].values
 
-        # Fallback to group 2 where group 1 is unmatched
-        if "group_2_mineral_id" in ds_root:
-            g2_id = ds_root["group_2_mineral_id"].values[footprint_mask]
-            g2_bd = ds_root["group_2_band_depth"].values[footprint_mask]
-            use_g2 = (group1_id <= 0) & (g2_id > 0)
-            group1_id = np.where(use_g2, g2_id, group1_id)
-            band_depth = np.where(use_g2, g2_bd, band_depth)
+                valid_coords = np.isfinite(lat_grid) & np.isfinite(lon_grid)
+                dist_m = np.full(lat_grid.shape, np.inf, dtype=np.float64)
 
-        valid_px = (group1_id > 0) & np.isfinite(band_depth) & (band_depth > 0.01)
-        if int(np.sum(valid_px)) < _MIN_VALID_PIXELS:
-            logger.debug(
-                "Granule %d: fewer than %d clear classified pixels - skipping.",
-                idx,
-                _MIN_VALID_PIXELS,
-            )
-            continue
+                _, _, dist_m[valid_coords] = geod.inv(
+                    np.full(int(np.sum(valid_coords)), lon, dtype=np.float64),
+                    np.full(int(np.sum(valid_coords)), lat, dtype=np.float64),
+                    lon_grid[valid_coords].astype(np.float64),
+                    lat_grid[valid_coords].astype(np.float64),
+                )
 
-        mineral_names: list[str] = [
-            name.decode("utf-8") if isinstance(name, bytes) else str(name)
-            for name in ds_meta["name"].values
-        ]
-        id_to_name = {i: name for i, name in enumerate(mineral_names)}
+                footprint_mask = dist_m <= radius_m
+                n_footprint_px = int(np.sum(footprint_mask))
+                if n_footprint_px == 0:
+                    continue
 
-        valid_ids = group1_id[valid_px]
-        valid_depths = band_depth[valid_px]
+                group1_id = ds_root["group_1_mineral_id"].values[footprint_mask]
+                band_depth = ds_root["group_1_band_depth"].values[footprint_mask]
 
-        class_counts: dict[str, float] = {c: 0.0 for c in MINERAL_CLASSES}
-        raw_detections: dict[str, int] = {}
+                # Fallback to group 2 where group 1 is unmatched
+                if "group_2_mineral_id" in ds_root:
+                    g2_id = ds_root["group_2_mineral_id"].values[footprint_mask]
+                    g2_bd = ds_root["group_2_band_depth"].values[footprint_mask]
+                    use_g2 = (group1_id <= 0) & (g2_id > 0)
+                    group1_id = np.where(use_g2, g2_id, group1_id)
+                    band_depth = np.where(use_g2, g2_bd, band_depth)
 
-        for m_id in valid_ids:
-            m_name = id_to_name.get(int(m_id), "Unknown")
-            raw_detections[m_name] = raw_detections.get(m_name, 0) + 1
-            m_lower = m_name.lower()
-            for kw, harm_class in EMIT_KEYWORD_MAP.items():
-                if kw in m_lower:
-                    class_counts[harm_class] += 1.0
-                    break
+                valid_px = (group1_id > 0) & np.isfinite(band_depth) & (band_depth > 0.01)
+                if int(np.sum(valid_px)) < _MIN_VALID_PIXELS:
+                    logger.debug(
+                        "Granule %d: fewer than %d clear classified pixels - skipping.",
+                        idx,
+                        _MIN_VALID_PIXELS,
+                    )
+                    continue
 
-        total_classified = sum(class_counts.values())
-        profile = (
-            {k: v / total_classified for k, v in class_counts.items()}
-            if total_classified > 0
-            else {k: 0.0 for k in MINERAL_CLASSES}
-        )
+                mineral_names: list[str] = [
+                    name.decode("utf-8") if isinstance(name, bytes) else str(name)
+                    for name in ds_meta["name"].values
+                ]
+                id_to_name = {i: name for i, name in enumerate(mineral_names)}
 
-        top_raw: list[tuple[str, int]] = sorted(
-            raw_detections.items(), key=lambda x: x[1], reverse=True
-        )[:5]
+                valid_ids = group1_id[valid_px]
+                valid_depths = band_depth[valid_px]
 
-        return {
-            "source": f"NASA EMITL2BMIN V001 (60 m, 380-2500 nm; Granule #{idx})",
-            "n_pixels": n_footprint_px,
-            "n_valid_mineral_pixels": int(np.sum(valid_px)),
-            "mean_band_depth": float(np.nanmean(valid_depths)),
-            "top_raw_minerals": top_raw,
-            "harmonized_profile": profile,
-        }
+                class_counts: dict[str, float] = {c: 0.0 for c in MINERAL_CLASSES}
+                raw_detections: dict[str, int] = {}
+
+                for m_id in valid_ids:
+                    m_name = id_to_name.get(int(m_id), "Unknown")
+                    raw_detections[m_name] = raw_detections.get(m_name, 0) + 1
+                    m_lower = m_name.lower()
+                    for kw, harm_class in EMIT_KEYWORD_MAP.items():
+                        if kw in m_lower:
+                            class_counts[harm_class] += 1.0
+                            break
+
+                total_classified = sum(class_counts.values())
+                profile = (
+                    {k: v / total_classified for k, v in class_counts.items()}
+                    if total_classified > 0
+                    else {k: 0.0 for k in MINERAL_CLASSES}
+                )
+
+                top_raw: list[tuple[str, int]] = sorted(
+                    raw_detections.items(), key=lambda x: x[1], reverse=True
+                )[:5]
+
+                return {
+                    "source": f"NASA EMITL2BMIN V001 (60 m, 380-2500 nm; Granule #{idx})",
+                    "n_pixels": n_footprint_px,
+                    "n_valid_mineral_pixels": int(np.sum(valid_px)),
+                    "mean_band_depth": float(np.nanmean(valid_depths)),
+                    "top_raw_minerals": top_raw,
+                    "harmonized_profile": profile,
+                }
+        finally:
+            if hasattr(fobj, "close"):
+                fobj.close()
 
     raise InsufficientPixelsError(
         "All returned EMIT granules had < 15 cloud-free mineral detections "

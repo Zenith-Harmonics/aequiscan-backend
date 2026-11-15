@@ -163,11 +163,57 @@ class SectorResult(BaseModel):
 class AnalogComparisonRequest(BaseModel):
     """API request schema for comparing an Earth candidate against a planetary target."""
 
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "earth_site": {
+                    "site_id": "qaidam_dalangtan",
+                    "name": "Qaidam Basin (Dalangtan Playa)",
+                    "body": "earth",
+                    "bbox": {
+                        "min_lon": 91.35,
+                        "min_lat": 38.40,
+                        "max_lon": 91.45,
+                        "max_lat": 38.50,
+                    },
+                    "start_date": "2024-05-01",
+                    "end_date": "2024-09-30",
+                },
+                "target_site": {
+                    "site_id": "gale_crater",
+                    "name": "Gale Crater",
+                    "body": "mars",
+                    "bbox": {
+                        "min_lon": 137.35,
+                        "min_lat": -4.70,
+                        "max_lon": 137.45,
+                        "max_lat": -4.60,
+                    },
+                },
+                "mission_profile": "astrobiology",
+            }
+        }
+    }
+
     earth_site: SiteQuery
     target_site: SiteQuery
     mission_profile: MissionProfile = MissionProfile.BALANCED
     custom_weights: Optional[Dict[SectorID, float]] = None
 
+    @model_validator(mode="after")
+    def validate_comparison_inputs(self) -> "AnalogComparisonRequest":
+        if self.earth_site.body != PlanetBody.EARTH:
+            raise ValueError(
+                f"earth_site.body must be 'earth', got '{self.earth_site.body.value}'."
+            )
+        if self.target_site.body == PlanetBody.EARTH:
+            raise ValueError("target_site.body must be 'mars' or 'moon'.")
+        if self.custom_weights is not None:
+            if any(w < 0.0 for w in self.custom_weights.values()):
+                raise ValueError("custom_weights values must be non-negative.")
+            if sum(self.custom_weights.values()) <= 0.0:
+                raise ValueError("custom_weights must sum to a strictly positive number.")
+        return self
 
 class AnalogComparisonReport(BaseModel):
     """API response schema containing full multi-sector breakdown and explainability."""
